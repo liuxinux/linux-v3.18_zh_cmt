@@ -20,6 +20,9 @@ int query_mca(void)
 	struct biosregs ireg, oreg;
 	u16 len;
 
+    /*设置ah寄存器的值为0xc0,然后调用#15 BIOS中断。
+     * 中断返回之后检测carry flag。如果被置位，说明BIOS不支持MCA。
+     * 如果CF被设置为0，那么ES:BX指向系统信息表。*/
 	initregs(&ireg);
 	ireg.ah = 0xc0;
 	intcall(0x15, &ireg, &oreg);
@@ -32,7 +35,7 @@ int query_mca(void)
 
 	if (len > sizeof(boot_params.sys_desc_table))
 		len = sizeof(boot_params.sys_desc_table);
-
+    /* 将es:bx指向的内存地址的内容拷贝到boot_params.sys_desc_table */
 	copy_from_fs(&boot_params.sys_desc_table, oreg.bx, len);
 	return 0;
 }

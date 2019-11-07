@@ -158,6 +158,7 @@ void main(void)
 	init_heap();
 
 	/* Make sure we have all the proper CPU support */
+    /* 确认系统对CPU的支持 validate:确认 */
 	if (validate_cpu()) {
 		puts("Unable to boot - please use a kernel appropriate "
 		     "for your CPU.\n");
@@ -168,12 +169,16 @@ void main(void)
 	set_bios_mode();
 
 	/* Detect memory layout */
+    /* 内存分布侦测 */
 	detect_memory();
 
 	/* Set keyboard repeat rate (why?) and query the lock flags */
+    /* 键盘初始化 */
 	keyboard_init();
 
+    /*接下来内核进行一些类的参数查询*/
 	/* Query MCA information */
+    /* 通过#15中断来过去及其的型号信息、BIOS版本以及其他一些硬件相关的属性 */
 	query_mca();
 
 	/* Query Intel SpeedStep (IST) information */

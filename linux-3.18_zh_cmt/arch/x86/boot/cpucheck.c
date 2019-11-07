@@ -99,12 +99,27 @@ static int check_cpuflags(void)
  *
  * *err_flags_ptr is set to the flags error array if there are flags missing.
  */
+/*
+ * 如果错误返回-1
+ * *cpu_level 是当前CPU的等级。*req_level 是请求等级。
+ * 为此， x86_64是被认为是64等级。
+ *
+ * 如果有flags丢失，则*err_flags_ptr 是错误标志数组。
+ */
 int check_cpu(int *cpu_level_ptr, int *req_level_ptr, u32 **err_flags_ptr)
 {
 	int err;
-
-	memset(&cpu.flags, 0, sizeof cpu.flags);
-	cpu.level = 3;
+    /* cpu是一个全局变量，其声明在/arch/x86/boot/cpuflags.h,该头文件是嵌套在boot.h文件中 */
+    /*
+        struct cpu_features {
+            int level;      // Family, or 64 for x86-64
+            int model;
+            u32 flags[NCAPINTS];//NCAPINTS:11
+        }     
+        extern struct cpu_features cpu;
+     */
+	memset(&cpu.flags, 0, sizeof cpu.flags);//将flags[NCAPINTS]清0
+	cpu.level = 3;//初始化cpu.level值为3;
 
 	if (has_eflag(X86_EFLAGS_AC))
 		cpu.level = 4;
@@ -124,7 +139,6 @@ int check_cpu(int *cpu_level_ptr, int *req_level_ptr, u32 **err_flags_ptr)
 
 		u32 ecx = MSR_K7_HWCR;
 		u32 eax, edx;
-
 		asm("rdmsr" : "=a" (eax), "=d" (edx) : "c" (ecx));
 		eax &= ~(1 << 15);
 		asm("wrmsr" : : "a" (eax), "d" (edx), "c" (ecx));
