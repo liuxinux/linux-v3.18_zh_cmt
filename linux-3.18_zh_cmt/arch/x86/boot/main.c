@@ -117,19 +117,30 @@ static void init_heap(void)
 {
 	char *stack_end;
 
-	if (boot_params.hdr.loadflags & CAN_USE_HEAP) {
+    if (boot_params.hdr.loadflags & CAN_USE_HEAP) {
+    /*检查内核设置头中的loadflags是否设置了CAN_USE_HEAP标志。*/
 		asm("leal %P1(%%esp),%0"
 		    : "=r" (stack_end) : "i" (-STACK_SIZE));
+        /*计算栈的结束地址：stack_end = esp - STACK_SIZE
+         *其中esp就是end of stack space,
+         *初始化的地方在/arch/x86/boot/header.S#486*/
 
+        /*计算堆的结束地址, heap_end_ptr的初始化是在header.S#345*/
+        /*heap_end_ptr: .word _end+STACK_SIZE-512*/
+        /*其中512即0x200*/
 		heap_end = (char *)
 			((size_t)boot_params.hdr.heap_end_ptr + 0x200);
+        /*判断heap_end是否大于stack_end,如果条件成立，
+         *就将stack_end设置成heap_end。*/
 		if (heap_end > stack_end)
 			heap_end = stack_end;
-	} else {
-		/* Boot protocol 2.00 only, no heap available */
-		puts("WARNING: Ancient bootloader, some functionality "
-		     "may be limited!\n");
-	}
+            /*堆和栈是相邻的，但是增长方向是相反的。
+             *所以，他们的结束地址可以是一样的。*/
+        } else {
+            /* Boot protocol 2.00 only, no heap available */
+            puts("WARNING: Ancient bootloader, some functionality "
+                 "may be limited!\n");
+        }
 }
 
 void main(void)
@@ -143,6 +154,7 @@ void main(void)
 		puts("early console in setup code\n");
 
 	/* End of heap check */
+    /* 堆初始化*/
 	init_heap();
 
 	/* Make sure we have all the proper CPU support */
