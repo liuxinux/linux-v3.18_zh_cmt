@@ -23,24 +23,28 @@ int query_apm_bios(void)
 	struct biosregs ireg, oreg;
 
 	/* APM BIOS installation check */
+    /* 调用0x15中断获取APM设置信息 */
 	initregs(&ireg);
 	ireg.ah = 0x53;
 	intcall(0x15, &ireg, &oreg);
 
 	if (oreg.flags & X86_EFLAGS_CF)
 		return -1;		/* No APM BIOS */
-
+    /* 检查bx和cx的值 */
+    /* 检查PM标记 */
 	if (oreg.bx != 0x504d)		/* "PM" signature */
 		return -1;
-
+    /* 检查是否支持32位模式 */
 	if (!(oreg.cx & 0x02))		/* 32 bits supported? */
 		return -1;
 
 	/* Disconnect first, just in case */
+    /* 调用0x15中断，先临时断开APM接口； */
 	ireg.al = 0x04;
 	intcall(0x15, &ireg, NULL);
 
 	/* 32-bit connect */
+    /* 调用0x15中断，使用32位接口重新连接APM */
 	ireg.al = 0x03;
 	intcall(0x15, &ireg, &oreg);
 
@@ -57,7 +61,7 @@ int query_apm_bios(void)
 
 	/* Redo the installation check as the 32-bit connect;
 	   some BIOSes return different flags this way... */
-
+    /* 再次使用0x15中断获取APM设置，然后将信息写入到boot_params.apm_bios_info */
 	ireg.al = 0x00;
 	intcall(0x15, &ireg, &oreg);
 

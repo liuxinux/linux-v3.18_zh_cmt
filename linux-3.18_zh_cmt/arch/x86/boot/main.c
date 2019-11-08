@@ -182,21 +182,27 @@ void main(void)
 	query_mca();
 
 	/* Query Intel SpeedStep (IST) information */
+    /* 获取Intel SpeedStep信息。
+     * 首先检查CPU类型，然后调用0x15中断获得这个信息并放入boot_params中。*/
 	query_ist();
 
 	/* Query APM information */
+    /* 从BIOS获得高级电源管理(APM)信息 */
 #if defined(CONFIG_APM) || defined(CONFIG_APM_MODULE)
 	query_apm_bios();
 #endif
 
 	/* Query EDD information */
+    /* 从BIOS中查询EDD(Enhanced Disk Drive)信息。 */
 #if defined(CONFIG_EDD) || defined(CONFIG_EDD_MODULE)
 	query_edd();
 #endif
 
 	/* Set the video mode */
+    /* 设置显示模式 */
 	set_video();
 
 	/* Do the last things and invoke protected mode */
+    /* 在跳转到保护模式前做最后的准备工作 */
 	go_to_protected_mode();
 }

@@ -21,6 +21,8 @@ static void store_cursor_position(void)
 {
 	struct biosregs ireg, oreg;
 
+    /* 通过调用0x10 BIOS 中断，中断返回的行和列信息放入到dl和dh中
+     * 并将这些信息保存在boto_params.screen_info字段的orig_x和orig_y字段*/
 	initregs(&ireg);
 	ireg.ah = 0x03;
 	intcall(0x10, &ireg, &oreg);
@@ -65,22 +67,29 @@ static void store_mode_params(void)
 	   (currently only video-vesa.c) to store the parameters */
 	if (graphic_mode)
 		return;
-
+    /* 将当前屏幕上光标的位置保存起来 */
 	store_cursor_position();
+    /* 将当前使用的显示模式保存到boot_params.screen_info.orig_video_mode */
 	store_video_mode();
 
 	if (boot_params.screen_info.orig_video_mode == 0x07) {
 		/* MDA, HGC, or VGA in monochrome mode */
+        /* 如果当前显示模式是MDA\HGC或者单色VGA模式 */
 		video_segment = 0xb000;
 	} else {
 		/* CGA, EGA, VGA and so forth */
+        /* 如果当前显示模式是彩色模式 */
 		video_segment = 0xb800;
 	}
 
-	set_fs(0);
+    /* 获取将字体大小信息放到orig_video_points */
+	set_fs(0);//将数字0放入FS寄存器
+    /* 从内存地址0x485处获取字体大小信息并保存到orig_video_points */
 	font_size = rdfs16(0x485); /* Font size, BIOS area */
 	boot_params.screen_info.orig_video_points = font_size;
 
+    /*从内存地址0x44a出获取屏幕列信息，从0x484处获得屏幕行信息。
+     * 并保存在orig_video_cols和orig_video_lines中。*/
 	x = rdfs16(0x44a);
 	y = (adapter == ADAPTER_CGA) ? 25 : rdfs8(0x484)+1;
 
@@ -237,14 +246,17 @@ static struct saved_screen {
 static void save_screen(void)
 {
 	/* Should be called after store_mode_params() */
+    /* 获得当前屏幕的所有信息保存到saved_screen结构体中 */
 	saved.x = boot_params.screen_info.orig_video_cols;
 	saved.y = boot_params.screen_info.orig_video_lines;
 	saved.curx = boot_params.screen_info.orig_x;
 	saved.cury = boot_params.screen_info.orig_y;
 
+    /* 检查HEAP中是否有足够的空间保存在这个结构体的数据 */
 	if (!heap_free(saved.x*saved.y*sizeof(u16)+512))
 		return;		/* Not enough heap to save the screen */
 
+    /* 将在HEAP中分配相应的空间并且将saved_screen保存到HEAP */
 	saved.data = GET_HEAP(u16, saved.x*saved.y);
 
 	set_fs(video_segment);
@@ -314,16 +326,22 @@ static void restore_screen(void)
 
 void set_video(void)
 {
+    /* 从boot_params.hdr数据结构获取显示模式 */
 	u16 mode = boot_params.hdr.vid_mode;
 
+    /*将HEAP头指向_end符号*/
+    /*#define RESET_HEAP() ((void *)( HEAP = _end ))*/
 	RESET_HEAP();
 
+    /* 将赌赢的显示模式的相关参数写入boot_params.screen_info字段 */
 	store_mode_params();
+    /* 将当前屏幕上的所有信息保存到HEAP中 */
 	save_screen();
+    /*遍历所有的显卡，并通过调用驱动程序设置显卡所支持的显示模式*/
 	probe_cards(0);
 
 	for (;;) {
-		if (mode == ASK_VGA)
+		if (mode == ASK_VGA)//如果vid_mode=ask,就让用户选择显示模式
 			mode = mode_menu();
 
 		if (!set_mode(mode))
@@ -333,9 +351,11 @@ void set_video(void)
 		mode = ASK_VGA;
 	}
 	boot_params.hdr.vid_mode = mode;
+    /* 将EDID(Extended Display Identification Data)写入内存，以便于内核访问 */
 	vesa_store_edid();
 	store_mode_params();
 
+    /*将前面保存的当前屏幕信息还原到屏幕上*/
 	if (do_restore)
 		restore_screen();
 }

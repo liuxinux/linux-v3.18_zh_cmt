@@ -80,6 +80,7 @@ static int get_edd_info(u8 devno, struct edd_info *ei)
 
 	/* Check Extensions Present */
 
+    /* 调用0x13中断调用来检查EDD是否被硬盘支持 */
 	initregs(&ireg);
 	ireg.ah = 0x41;
 	ireg.bx = EDDMAGIC1;
@@ -98,6 +99,7 @@ static int get_edd_info(u8 devno, struct edd_info *ei)
 
 	/* Extended Get Device Parameters */
 
+    /* 如果EDD被支持，再次调用0x13中断，并将si执行一个数据缓冲区地址 */
 	ei->params.length = sizeof(ei->params);
 	ireg.ah = 0x48;
 	ireg.si = (size_t)&ei->params;
@@ -133,6 +135,7 @@ void query_edd(void)
 	struct edd_info ei, *edp;
 	u32 *mbrptr;
 
+    /* 检查内核命令行参数是否设置了edd选项 */
 	if (cmdline_find_option("edd", eddarg, sizeof eddarg) > 0) {
 		if (!strcmp(eddarg, "skipmbr") || !strcmp(eddarg, "skip")) {
 			do_edd = 1;
@@ -159,12 +162,13 @@ void query_edd(void)
 	if (!be_quiet)
 		printf("Probing EDD (edd=off to disable)... ");
 
+    /* 如果EDD被激活了，query_edd遍历所有BIOS支持的硬盘，并获取相应硬盘的EDD信息 */
 	for (devno = 0x80; devno < 0x80+EDD_MBR_SIG_MAX; devno++) {
 		/*
 		 * Scan the BIOS-supported hard disks and query EDD
 		 * information...
 		 */
-		if (!get_edd_info(devno, &ei)
+		if (!get_edd_info(devno, &ei)//获取edd信息
 		    && boot_params.eddbuf_entries < EDDMAXNR) {
 			memcpy(edp, &ei, sizeof ei);
 			edp++;

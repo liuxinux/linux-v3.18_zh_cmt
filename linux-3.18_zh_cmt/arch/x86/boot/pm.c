@@ -104,6 +104,8 @@ static void setup_idt(void)
 void go_to_protected_mode(void)
 {
 	/* Hook before leaving real mode, also disables interrupts */
+    /* 如果发现realmode_seitch hook, 那么将调用它，并禁止NMI中断 */
+    /* 如果没有发现，则直接禁止NMI中断 */
 	realmode_switch_hook();
 
 	/* Enable the A20 gate */

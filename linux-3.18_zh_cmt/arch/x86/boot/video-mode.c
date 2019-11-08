@@ -29,7 +29,31 @@ int force_x, force_y;	/* Don't query the BIOS for cols/rows */
 int do_restore;		/* Screen contents changed during mode flip */
 int graphic_mode;	/* Graphic mode with linear frame buffer */
 
-/* Probe the video drivers and have them generate their mode lists. */
+/* Probe the video drivers and have them generate their mode lists.   */
+/* video_cards是被声明在arch/x86/boot/setup.ld中.videocards的内存段   */
+/* 在.videocards内存断中存放的是被内核初始化代码定义的card_info结构。 */
+/* 内核初始化代码一般都如下所示：                                     */
+/* static __videocard video_vga = {
+ *    .card_name    = "VGA"
+ *    .probe        = vga_probe,
+ *    .set_mode     = vga_set_mode,
+ * }
+ * 其中，__videocard是一个宏定义：
+ * #define __videocard struct card_info __attribute__((used,section(".videocards")))
+ * 因此__videocard是一个card_info结构，这个结构定义如下：
+ * struct card_info {
+ *     const char *card_name;
+ *     int (*set_mode)(struct mode_info *mode);
+ *     int (*probe)(void)
+ *     struct mode_info *modes;
+ *     int nmodes;
+ *     int unsafe;
+ *     u16 xmode_first;
+ *     u16 xmode_n;
+ * }
+ *
+ * 所以，probe_cards函数可以使用video_cards，通过循环遍历所有的card_info.
+ */
 void probe_cards(int unsafe)
 {
 	struct card_info *card;
@@ -79,6 +103,10 @@ static int raw_set_mode(u16 mode, u16 *real_mode)
 	mode &= ~VIDEO_RECALC;
 
 	/* Scan for mode based on fixed ID, position, or resolution */
+    /* 遍历内核知道的所有card_info信息，如果发现某张显卡支持传入的模式
+     * 就调用card_info结构保存的set_mode函数地址进行显卡显示模式的设置
+     * 以video_vga这个card_info结构来说，set_mode函数就执行了vga_set_mode函数
+     * 该函数根据输入的vga显示模式，调用不同的函数完成显示模式的设置。*/
 	nmode = 0;
 	for (card = video_cards; card < video_cards_end; card++) {
 		mi = card->modes;
@@ -150,6 +178,7 @@ int set_mode(u16 mode)
 	u16 real_mode;
 
 	/* Very special mode numbers... */
+    /* 检查mode参数 */
 	if (mode == VIDEO_CURRENT_MODE)
 		return 0;	/* Nothing to do... */
 	else if (mode == NORMAL_VGA)
@@ -157,6 +186,8 @@ int set_mode(u16 mode)
 	else if (mode == EXTENDED_VGA)
 		mode = VIDEO_8POINT;
 
+    /* 遍历内核知道的card_info信息，如果发现某张显卡支持传入的模式
+     * 就调用card_info结构中保存的set_mode函数地址进行显示模式的设置*/
 	rv = raw_set_mode(mode, &real_mode);
 	if (rv)
 		return rv;
