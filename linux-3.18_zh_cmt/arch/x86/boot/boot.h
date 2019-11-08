@@ -75,7 +75,9 @@ static inline u32 inl(u16 port)
 
 static inline void io_delay(void)
 {
+    /* 对于I/O端口0x80写入任何字节都将得到1ms的延时。*/
 	const u16 DELAY_PORT = 0x80;
+    /* 代码将al寄存器中的值写到了这个端口。*/
 	asm volatile("outb %%al,%0" : : "dN" (DELAY_PORT));
 }
 

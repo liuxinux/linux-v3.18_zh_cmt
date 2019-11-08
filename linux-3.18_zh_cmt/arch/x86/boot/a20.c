@@ -58,19 +58,19 @@ static int a20_test(int loops)
 	int ok = 0;
 	int saved, ctr;
 
-	set_fs(0x0000);
-	set_gs(0xffff);
+	set_fs(0x0000);//将0x0000放入到FS寄存器
+	set_gs(0xffff);//将0xFFFF放入到GS寄存器
 
-	saved = ctr = rdfs32(A20_TEST_ADDR);
+	saved = ctr = rdfs32(A20_TEST_ADDR);//将A20_TEST_ADDR内存地址的内容放入saved和ctr变量
 
 	while (loops--) {
-		wrfs32(++ctr, A20_TEST_ADDR);
+		wrfs32(++ctr, A20_TEST_ADDR);//使用wrfs32函数将更新过的ctr的值写入fs:gs
 		io_delay();	/* Serialize and make delay constant */
-		ok = rdgs32(A20_TEST_ADDR+0x10) ^ ctr;
-		if (ok)
+		ok = rdgs32(A20_TEST_ADDR+0x10) ^ ctr;//从GS:A20_TEST_ADDR+0x10读取内容。
+		if (ok)//如果Ok不为0,那么A20已经被激活
 			break;
 	}
-
+    
 	wrfs32(saved, A20_TEST_ADDR);
 	return ok;
 }
@@ -135,15 +135,20 @@ int enable_a20(void)
        while (loops--) {
 	       /* First, check to see if A20 is already enabled
 		  (legacy free, etc.) */
+           /* 检测A20地址线是否已经被激活了 */
 	       if (a20_test_short())
 		       return 0;
+
+           /* 如果没有成功，就做下面的尝试使能A20 */
 	       
 	       /* Next, try the BIOS (INT 0x15, AX=0x2401) */
+           /* 调用BIOS0x15中断激活A20地址线 */
 	       enable_a20_bios();
 	       if (a20_test_short())
 		       return 0;
 	       
 	       /* Try enabling A20 through the keyboard controller */
+           /* 通过键盘控制器使能A20 */
 	       kbc_err = empty_8042();
 
 	       if (a20_test_short())
