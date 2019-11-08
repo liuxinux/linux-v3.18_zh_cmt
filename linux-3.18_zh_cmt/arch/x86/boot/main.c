@@ -204,5 +204,6 @@ void main(void)
 
 	/* Do the last things and invoke protected mode */
     /* 在跳转到保护模式前做最后的准备工作 */
+    /* 函数定义在arch/x86/boot/pmjump.S */
 	go_to_protected_mode();
 }
