@@ -32,6 +32,9 @@
 #include <asm/processor-flags.h>
 #include <asm/asm-offsets.h>
 
+    /* __HEAD定义在include/linux/init.h */
+    /* #define __HEAD       .section    ".head.text","ax" */
+    /* 其拥有.head.text的命名和ax标记。表示这个段是可执行的也可说是包含了代码 */
 	__HEAD
 	.code32
 ENTRY(startup_32)
@@ -41,14 +44,18 @@ ENTRY(startup_32)
 	 * kernel(text+data+bss+brk) ramdisk, zero_page, command line
 	 * all need to be under the 4G limit.
 	 */
-	cld
+	cld//将标志寄存器的DF(方向标志)位清空。当方向标志被清空，所有的串操作指令
+       //像stos、scas等等将会增加索引寄存器esi或者edi的值。
+       //这里清空方向标志是因为接下来我们会使用汇编的串操作指令来做为页表腾出空间等工作。
 	/*
 	 * Test KEEP_SEGMENTS flag to see if the bootloader is asking
 	 * us to not reload segments
 	 */
+    /* 从内核加载头中的loadflags字段来检查KEEP_SEGMENTS标志。 */
 	testb $(1<<6), BP_loadflags(%esi)
-	jnz 1f
+	jnz 1f   //如果设置了KEEP_SEGMENTS,直接跳转到1处。
 
+    /* 如果没有设置KEEP_SEGMENTS，就用__BOOT_DS更新段寄存器 */
 	cli
 	movl	$(__BOOT_DS), %eax
 	movl	%eax, %ds
@@ -64,19 +71,24 @@ ENTRY(startup_32)
  * data at 0x1e4 (defined as a scratch field) are used as the stack
  * for this calculation. Only 4 bytes are needed.
  */
-	leal	(BP_scratch+4)(%esi), %esp
-	call	1f
-1:	popl	%ebp
-	subl	$1b, %ebp
+	leal	(BP_scratch+4)(%esi), %esp  /*我们把scratch的地址加上4存入esp寄存器*/
+	call	1f              /*跳转1f标签*/
+1:	popl	%ebp            /*并把该标签的地址放入ebq寄存器*/
+	subl	$1b, %ebp       /*计算startup_32的地址（0x100000）*/
 
 /* setup a stack and make sure cpu supports long mode. */
-	movl	$boot_stack_end, %eax
-	addl	%ebp, %eax
-	movl	%eax, %esp
+/* boots_stack_end标签被定义本文件中.bss*/
+	movl	$boot_stack_end, %eax   /*把boots_stack_end放到eax寄存器中*/
+                                    /*那么eax寄存器将包含boot_stack_end链接后的地址或者
+                                     0x0+boot_stack_end*/
+	addl	%ebp, %eax              /*加上ebq的startup_32实际地址就得到了boot_stack_end的实际地址*/
+	movl	%eax, %esp              /*将boot_stack_end加到栈指针上*/
 
-	call	verify_cpu
-	testl	%eax, %eax
-	jnz	no_longmode
+    /*建立了栈之后，下一步是CPU的确认*/
+	call	verify_cpu      /*检查CPU是否支持长模式和SSE*/
+                            /*verify_cpu定义在arch/x86/kernel/verify_cpu.S中*/
+	testl	%eax, %eax      /*eax寄存器返回0表示成功，1表示失败 */
+	jnz	no_longmode         /*如果eax的值不是0，就跳转到no_longmode
 
 /*
  * Compute the delta between where we were compiled to run at
@@ -87,13 +99,16 @@ ENTRY(startup_32)
  * for safe in-place decompression.
  */
 
+/*
+ * 接下来是计算重定位地址
+ */
 #ifdef CONFIG_RELOCATABLE
-	movl	%ebp, %ebx
+	movl	%ebp, %ebx #ebq寄存器中的值就是startup_32标签的物理地址。这里把该值放入到ebx寄存器。
 	movl	BP_kernel_alignment(%esi), %eax
 	decl	%eax
 	addl	%eax, %ebx
 	notl	%eax
-	andl	%eax, %ebx
+	andl	%eax, %ebx #对齐2M的整数倍
 	cmpl	$LOAD_PHYSICAL_ADDR, %ebx
 	jge	1f
 #endif
@@ -101,47 +116,65 @@ ENTRY(startup_32)
 1:
 
 	/* Target address to relocate to for decompression */
+    /* ebx寄存器中存放的是内核解压缩的目标地址。 */
 	addl	$z_extract_offset, %ebx
 
 /*
  * Prepare for entering 64 bit mode
  */
-
+/*
+ * 进入长模式（64位模式）前的准备工作
+ */
 	/* Load new GDT with the 64bit segments using 32bit descriptor */
-	leal	gdt(%ebp), %eax
-	movl	%eax, gdt+2(%ebp)
-	lgdt	gdt(%ebp)
+    /* 使用32位描述符用64位段加载新GDT */
+    /* 更新全局描述符表 */
+    leal	gdt(%ebp), %eax     /*把ebq寄存器加上gdt的偏移存到eax寄存器*/
+	movl	%eax, gdt+2(%ebp)   /*把eax寄存器中的地址加上gdt+2 偏移的位置*/
+	lgdt	gdt(%ebp)           /*用lgdt指令载入全局描述符 */
 
 	/* Enable PAE mode */
-	movl	%cr4, %eax
-	orl	$X86_CR4_PAE, %eax
-	movl	%eax, %cr4
+    /* 启用PAE模式 */
+	movl	%cr4, %eax          /*将cr4寄存器的值传入eax寄存器*/
+	orl	$X86_CR4_PAE, %eax      /*将第五位置1*/
+	movl	%eax, %cr4          /*再写回cr4*/
 
  /*
   * Build early 4G boot pagetable
   */
+ /*
+  * 创建早期4G启动页表
+  */
 	/* Initialize Page tables to 0 */
-	leal	pgtable(%ebx), %edi
-	xorl	%eax, %eax
-	movl	$((4096*6)/4), %ecx
-	rep	stosl
+    /* 初始化页表为0 */
+    /* 通常需要建立6个页表，每个表都是4096字节，所以需要整理一块24K的地址空间。 */
+	leal	pgtable(%ebx), %edi     /*把ebx相关的pgtable的地址放到edi寄存器*/
+	xorl	%eax, %eax              /*清空eax寄存器*/
+	movl	$((4096*6)/4), %ecx     /*并将ecx赋值位(4086*6)/4=6144*/
+	rep	stosl                       /*把eax的值写到edi指向的地址, 然后给edi加4，ecx减4
+                                     *重复知道ecx小于等于0，所有才把6144赋值给ecx*/
 
 	/* Build Level 4 */
-	leal	pgtable + 0(%ebx), %edi
-	leal	0x1007 (%edi), %eax
-	movl	%eax, 0(%edi)
+    /* 构建顶级页表PML4 */
+	leal	pgtable + 0(%ebx), %edi /*把和ebx(startup_32)相关的pgtalbe的地址放到ebi寄存器*/
+	leal	0x1007 (%edi), %eax     /*把相对edi寄存器中的地址偏移0x1007的地址放到eax寄存器*/
+                                    /*0x1007是PML4的大小4096加上7.这里的7代表了PML4的项标记*/
+                                    /*在这里标记是PRESENT+RW+USER*/
+	movl	%eax, 0(%edi)           /*把第一个PDP（页目录指针）项的地址写到PML4*/
 
 	/* Build Level 3 */
-	leal	pgtable + 0x1000(%ebx), %edi
-	leal	0x1007(%edi), %eax
-	movl	$4, %ecx
-1:	movl	%eax, 0x00(%edi)
+    /* 构建3级页表*/
+	leal	pgtable + 0x1000(%ebx), %edi    /*把3级页表指针表的基地址放到edi*/
+	leal	0x1007(%edi), %eax              /*把第一个2级页表目录指针表的首项的地址放到eax寄存器*/
+	movl	$4, %ecx                        /*把4赋值给ecx寄存器,作为接下来循环的计数器*/
+1:	movl	%eax, 0x00(%edi)                /*把第一个页目录指针项写到edi指向的地址*/
 	addl	$0x00001000, %eax
 	addl	$8, %edi
 	decl	%ecx
 	jnz	1b
 
 	/* Build Level 2 */
+    /* 构建2级列表*/
+    /* 建立2048个2MB页的页表项 */
 	leal	pgtable + 0x2000(%ebx), %edi
 	movl	$0x00000183, %eax
 	movl	$2048, %ecx
@@ -151,11 +184,14 @@ ENTRY(startup_32)
 	decl	%ecx
 	jnz	1b
 
+    /* 上面映射了4G大小的内存*/
 	/* Enable the boot page tables */
-	leal	pgtable(%ebx), %eax
+    /* 使能启动页表 */
+	leal	pgtable(%ebx), %eax     /* 把高级页表PML4的地址放到cr3寄存器中 */
 	movl	%eax, %cr3
 
 	/* Enable Long mode in EFER (Extended Feature Enable Register) */
+    /* 设置MSR中的EFER.LME标记 */
 	movl	$MSR_EFER, %ecx
 	rdmsr
 	btsl	$_EFER_LME, %eax
@@ -177,8 +213,8 @@ ENTRY(startup_32)
 	 * We place all of the values on our mini stack so lret can
 	 * used to perform that far jump.
 	 */
-	pushl	$__KERNEL_CS
-	leal	startup_64(%ebp), %eax
+	pushl	$__KERNEL_CSi                   /*把内核段代码地址入栈*/
+	leal	startup_64(%ebp), %eax          /*然后将startup64的地址导入eax*/
 #ifdef CONFIG_EFI_MIXED
 	movl	efi32_config(%ebp), %ebx
 	cmp	$0, %ebx
@@ -186,15 +222,17 @@ ENTRY(startup_32)
 	leal	handover_entry(%ebp), %eax
 1:
 #endif
-	pushl	%eax
+	pushl	%eax                            /*把eax入栈*/
 
 	/* Enter paged protected Mode, activating Long Mode */
+    /* 通过设置cr0寄存器中的PG和PE启用分页 */
 	movl	$(X86_CR0_PG | X86_CR0_PE), %eax /* Enable Paging and Protected mode */
 	movl	%eax, %cr0
 
 	/* Jump from 32bit compatibility mode into 64bit mode. */
-	lret
+	lret                    /*前面已经将startup_64函数的地址入栈，在lret指令之后，CPU取出了其地址跳转到那里*/
 ENDPROC(startup_32)
+    /*下面就到了64位模式了*/
 
 #ifdef CONFIG_EFI_MIXED
 	.org 0x190
@@ -423,20 +461,22 @@ relocated:
 no_longmode:
 	/* This isn't an x86-64 CPU so hang */
 1:
-	hlt
+	hlt             /*停止CPU,期间不会发生硬件中断*/
 	jmp     1b
 
 #include "../../kernel/verify_cpu.S"
 
-	.data
-gdt:
-	.word	gdt_end - gdt
-	.long	gdt
+/* 在之前已经载入全局描述符表了，这里再次载入只是把CS.L=1,CS.D=0 */
+/* 从而在64位模式下执行 */
+	.data   /*位于.data段*/
+gdt:        /*包含了5个描述符*/
+	.word	gdt_end - gdt       /*.word两字节，gdt从gdt_end-gdt开始，代表gdt表的最后一个字节 */
+	.long	gdt                 /*.long四字节，包含gdt的基地址 */
 	.word	0
-	.quad	0x0000000000000000	/* NULL descriptor */
-	.quad	0x00af9a000000ffff	/* __KERNEL_CS */
-	.quad	0x00cf92000000ffff	/* __KERNEL_DS */
-	.quad	0x0080890000000000	/* TS descriptor */
+	.quad	0x0000000000000000	/* NULL descriptor null段 */
+	.quad	0x00af9a000000ffff	/* __KERNEL_CS 内核代码段 */
+	.quad	0x00cf92000000ffff	/* __KERNEL_DS 内核数据段*/
+	.quad	0x0080890000000000	/* TS descriptor*/
 	.quad   0x0000000000000000	/* TS continued */
 gdt_end:
 
@@ -473,7 +513,8 @@ boot_stack_end:
 /*
  * Space for page tables (not in .bss so not zeroed)
  */
+/*页表空间（因为不是在.bss段，所以没有清0）*/
 	.section ".pgtable","a",@nobits
 	.balign 4096
 pgtable:
-	.fill 6*4096, 1, 0
+	.fill 6*4096, 1, 0  /*大小为24KB*/
