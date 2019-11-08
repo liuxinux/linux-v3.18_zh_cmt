@@ -332,6 +332,7 @@ static void parse_elf(void *output)
 
 	memcpy(phdrs, output + ehdr.e_phoff, sizeof(*phdrs) * ehdr.e_phnum);
 
+    /*从给定的ELF文件遍历所有程序头，并用正确的地址赋值所有可加载的段到输出缓冲区*/
 	for (i = 0; i < ehdr.e_phnum; i++) {
 		phdr = &phdrs[i];
 
@@ -354,6 +355,14 @@ static void parse_elf(void *output)
 	free(phdrs);
 }
 
+/*
+ * rmode - 指向 boot_params 结构体的指针， boot_params 被引导加载器填充或在早期内核初始化时填充
+ * heap - 指向早期启动堆的起始地址 boot_heap 的指针
+ * input_data - 指向压缩的内核，即 arch/x86/boot/compressed/vmlinux.bin.bz2 的指针
+ * input_len - 压缩的内核的大小
+ * output - 解压后内核的起始地址
+ * output_len - 解压后内核的大小
+ */
 asmlinkage __visible void *decompress_kernel(void *rmode, memptr heap,
 				  unsigned char *input_data,
 				  unsigned long input_len,
@@ -387,11 +396,13 @@ asmlinkage __visible void *decompress_kernel(void *rmode, memptr heap,
 	 * the entire decompressed kernel plus relocation table, or the
 	 * entire decompressed kernel plus .bss and .brk sections.
 	 */
+    /*选择内核镜像解压到的内存地址*/
 	output = choose_kernel_location(input_data, input_len, output,
 					output_len > run_size ? output_len
 							      : run_size);
 
 	/* Validate memory location choices. */
+    /* 去报获得的随机地址是正确对齐的。并且地址没有错误 */
 	if ((unsigned long)output & (MIN_KERNEL_ALIGN - 1))
 		error("Destination address inappropriately aligned");
 #ifdef CONFIG_X86_64
@@ -407,7 +418,9 @@ asmlinkage __visible void *decompress_kernel(void *rmode, memptr heap,
 #endif
 
 	debug_putstr("\nDecompressing Linux... ");
+    /*解压内核*/
 	decompress(input_data, input_len, NULL, NULL, output, NULL, error);
+    /*把解压后的内核移动到正确的位置。*/
 	parse_elf(output);
 	handle_relocations(output, output_len);
 	debug_putstr("done.\nBooting the kernel.\n");

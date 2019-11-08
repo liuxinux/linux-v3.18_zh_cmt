@@ -332,6 +332,7 @@ preferred_addr:
 #endif
 
 	/* Setup data segments. */
+    /* 设置数据段 */
 	xorl	%eax, %eax
 	movl	%eax, %ds
 	movl	%eax, %es
@@ -343,13 +344,17 @@ preferred_addr:
 	 * Compute the decompressed kernel start address.  It is where
 	 * we were loaded at aligned to a 2M boundary. %rbp contains the
 	 * decompressed kernel start address.
+     * 计算内核解压的起始地址。一般是2M对齐。%rbq中包含有内核解压内核的起始地址
 	 *
 	 * If it is a relocatable kernel then decompress and run the kernel
 	 * from load address aligned to 2MB addr, otherwise decompress and
 	 * run the kernel from LOAD_PHYSICAL_ADDR
+     * 如果有重定向内核，那么需要先2M对齐,再来解压和运行内核。
+     * 否则在LOAD——PHYSICAL_ADDR地址解压和运行内核。
 	 *
 	 * We cannot rely on the calculation done in 32-bit mode, since we
 	 * may have been invoked via the 64-bit entry point.
+     * 不能依赖在32位模式下的计算。
 	 */
 
 	/* Start with the delta to where the kernel will run at. */
@@ -415,6 +420,7 @@ relocated:
 
 /*
  * Clear BSS (stack is currently empty)
+ * 清空.bss节,因为很快就要跳转到C代码了。
  */
 	xorl	%eax, %eax
 	leaq    _bss(%rip), %rdi
@@ -449,6 +455,7 @@ relocated:
 	movq	%rbp, %r8		/* output target address */
 	movq	$z_output_len, %r9	/* decompressed length, end of relocs */
 	call	decompress_kernel	/* returns kernel location in %rax */
+                                /* 跳转到decompression_kernel */
 	popq	%r9
 	popq	%rsi
 
