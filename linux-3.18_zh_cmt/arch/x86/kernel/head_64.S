@@ -68,11 +68,13 @@ startup_64:
 	/*
 	 * Compute the delta between the address I am compiled to run at and the
 	 * address I am actually running at.
+     * 计算编译后要运行的地址和实际运行的地址之间的差值。
 	 */
 	leaq	_text(%rip), %rbp
 	subq	$_text - __START_KERNEL_map, %rbp
 
 	/* Is the address not 2M aligned? */
+    /* 检查地址是否2M对齐 */
 	movq	%rbp, %rax
 	andl	$~PMD_PAGE_MASK, %eax
 	testl	%eax, %eax
@@ -80,6 +82,7 @@ startup_64:
 
 	/*
 	 * Is the address too large?
+     * 通过检查高18位来防止这个地址过大
 	 */
 	leaq	_text(%rip), %rax
 	shrq	$MAX_PHYSMEM_BITS, %rax
@@ -87,6 +90,7 @@ startup_64:
 
 	/*
 	 * Fixup the physical addresses in the page table
+     * 修正页表基地址
 	 */
 	addq	%rbp, early_level4_pgt + (L4_START_KERNEL*8)(%rip)
 
@@ -101,10 +105,18 @@ startup_64:
 	 * creates a bunch of nonsense entries but that is fine --
 	 * it avoids problems around wraparound.
 	 */
+    /* 对初期页表进行 Identity 映射的初始化, 在 Identity 映射分页中，
+     * 虚拟地址会被映射到地址相同的物理地址上，即 1 : 1 。
+     */
+    /* 首先我们找到 _text 与 _early_level4_pgt 的 RIP 相对地址，
+     * 并把他们放入 rdi 与 rbx 寄存器中。
+     */
 	leaq	_text(%rip), %rdi
 	leaq	early_level4_pgt(%rip), %rbx
 
-	movq	%rdi, %rax
+	movq	%rdi, %rax          /*使用rax保存_text的地址*/
+    /* 同时，在全局页目录表中有一条记录中存放的是_text 的地址。
+     * 为了得到这条索引，我们把 _text 的地址右移 PGDIR_SHIFT 位 */
 	shrq	$PGDIR_SHIFT, %rax
 
 	leaq	(4096 + _KERNPG_TABLE)(%rbx), %rdx
@@ -178,10 +190,12 @@ ENTRY(secondary_startup_64)
 1:
 
 	/* Enable PAE mode and PGE */
+    /* 开启 PAE 和 PGE （Paging Global Extension） */
 	movl	$(X86_CR4_PAE | X86_CR4_PGE), %ecx
 	movq	%rcx, %cr4
 
 	/* Setup early boot stage 4 level pagetables. */
+    /* 将 phys_base 的物理地址（见上）放入 rax 就寄存器，同时将其放入 cr3 寄存器 */
 	addq	phys_base(%rip), %rax
 	movq	%rax, %cr3
 
@@ -191,11 +205,13 @@ ENTRY(secondary_startup_64)
 1:
 
 	/* Check if nx is implemented */
+    /* 检查CPU是否支持NX位 */
 	movl	$0x80000001, %eax
 	cpuid
 	movl	%edx,%edi
 
 	/* Setup EFER (Extended Feature Enable Register) */
+    /* 设置EEER寄存器 */
 	movl	$MSR_EFER, %ecx
 	rdmsr
 	btsl	$_EFER_SCE, %eax	/* Enable System Call */
@@ -206,6 +222,7 @@ ENTRY(secondary_startup_64)
 1:	wrmsr				/* Make changes effective */
 
 	/* Setup cr0 */
+    /* 设置cr0寄存器 */
 #define CR0_STATE	(X86_CR0_PE | X86_CR0_MP | X86_CR0_ET | \
 			 X86_CR0_NE | X86_CR0_WP | X86_CR0_AM | \
 			 X86_CR0_PG)
@@ -214,9 +231,12 @@ ENTRY(secondary_startup_64)
 	movq	%rax, %cr0
 
 	/* Setup a boot time stack */
+    /* 设置启动栈 */
+    /* 为了从汇编执行C语言代码，我们需要建立一个栈。将栈指针指向一个内存中合适的区域 */
 	movq stack_start(%rip), %rsp
 
 	/* zero EFLAGS after setting rsp */
+    /* 重置FLAGS寄存器 */
 	pushq $0
 	popfq
 
@@ -226,9 +246,11 @@ ENTRY(secondary_startup_64)
 	 * addresses where we're currently running on. We have to do that here
 	 * because in 32bit we couldn't load a 64bit linear address.
 	 */
+    /* 在初期启动栈设置好之后，使用 lgdt 指令来更新全局描述符表 */
 	lgdt	early_gdt_descr(%rip)
 
 	/* set up data segments */
+    /* 加载好了新的全局描述附表之后，跟之前一样我们重新加载一下各个段： */
 	xorl %eax,%eax
 	movl %eax,%ds
 	movl %eax,%ss
@@ -249,6 +271,7 @@ ENTRY(secondary_startup_64)
 	 * located at %gs:40.  Note that, on SMP, the boot cpu uses
 	 * init data section till per cpu areas are set up.
 	 */
+    /* 设置一下 gs 寄存器，令它指向一个特殊的栈irqstack ，用于处理中断 */
 	movl	$MSR_GS_BASE,%ecx
 	movl	initial_gs(%rip),%eax
 	movl	initial_gs+4(%rip),%edx
@@ -282,7 +305,10 @@ ENTRY(secondary_startup_64)
 	 *	REX.W + FF /5 JMP m16:64 Jump far, absolute indirect,
 	 *		address given in m16:64.
 	 */
-	movq	initial_code(%rip),%rax
+    /* 把实模式中的 bootparam 结构的地址放入 rdi (要记得 rsi 从一开始就保存了
+       这个结构体的指针)，然后跳转到C语言代码 */
+	movq	initial_code(%rip),%rax     /*initial_code 包含了 x86_64_start_kernel 的地址
+                                         其定义在arch/x86/kerne/head64.c：*/
 	pushq	$0		# fake return address to stop unwinder
 	pushq	$__KERNEL_CS	# set correct cs
 	pushq	%rax		# target address in negative space
