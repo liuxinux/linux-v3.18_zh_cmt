@@ -145,6 +145,9 @@ asmlinkage __visible void __init x86_64_start_kernel(char * real_mode_data)
 	 * Build-time sanity checks on the kernel image and module
 	 * area mappings. (these are purely build-time and produce no code)
 	 */
+    /* 首先是一些检查工作，如：
+     * 模块的虚拟地址不能低于内核 text 段基地址 __START_KERNEL_map ，
+     * 包含模块的内核 text 段的空间大小不能小于内核镜像大小等等。*/
 	BUILD_BUG_ON(MODULES_VADDR < __START_KERNEL_map);
 	BUILD_BUG_ON(MODULES_VADDR - __START_KERNEL_map < KERNEL_IMAGE_SIZE);
 	BUILD_BUG_ON(MODULES_LEN + KERNEL_IMAGE_SIZE > 2*PUD_SIZE);
@@ -156,11 +159,14 @@ asmlinkage __visible void __init x86_64_start_kernel(char * real_mode_data)
 	BUILD_BUG_ON(__fix_to_virt(__end_of_fixed_addresses) <= MODULES_END);
 
 	/* Kill off the identity-map trampoline */
+    /* 重置了所有的全局页目录项，同时向 cr3中重新写入了的全局页目录表的地址 */
 	reset_early_page_tables();
 
 	/* clear bss before set_intr_gate with early_idt_handler */
+    /* 清空.bss段 */
 	clear_bss();
 
+    /* 设置中断描述符表，并将其加载进 IDTR 寄存器 */
 	for (i = 0; i < NUM_EXCEPTION_VECTORS; i++)
 		set_intr_gate(i, early_idt_handlers[i]);
 	load_idt((const struct desc_ptr *)&idt_descr);
@@ -175,6 +181,7 @@ asmlinkage __visible void __init x86_64_start_kernel(char * real_mode_data)
 	if (console_loglevel >= CONSOLE_LOGLEVEL_DEBUG)
 		early_printk("Kernel alive\n");
 
+    /* 清理并初始化内存页 */
 	clear_page(init_level4_pgt);
 	/* set init_level4_pgt kernel high mapping*/
 	init_level4_pgt[511] = early_level4_pgt[511];
@@ -188,6 +195,7 @@ void __init x86_64_start_reservations(char *real_mode_data)
 	if (!boot_params.hdr.version)
 		copy_bootdata(__va(real_mode_data));
 
+    /*为EBDA（即Extended BIOS Data Area，扩展BIOS数据区域）预留空间*/
 	reserve_ebda_region();
 
 	start_kernel();

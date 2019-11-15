@@ -12,7 +12,9 @@ static inline unsigned int get_bios_ebda(void)
 	 * There is a real-mode segmented pointer pointing to the
 	 * 4K EBDA area at 0x40E.
 	 */
+    /* 将物理地址 0x40E 转换为虚拟地址 */
 	unsigned int address = *(unsigned short *)phys_to_virt(0x40E);
+    /* 得到了包含扩展BIOS数据区域虚拟基地址的段，把它左移4位后返回 */
 	address <<= 4;
 	return address;	/* 0 means none */
 }

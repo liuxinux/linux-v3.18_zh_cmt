@@ -507,14 +507,23 @@ int __init_memblock memblock_add_range(struct memblock_type *type,
 	if (!size)
 		return 0;
 
+    /* 由于 _rgn 的值是&memblock.reserved ，
+     * 下面的代码就直接将扩展BIOS数据区域
+     * 的基地址、大小和标志填入_rgn 中 */
 	/* special case for empty array */
 	if (type->regions[0].size == 0) {
 		WARN_ON(type->cnt != 1 || type->total_size);
 		type->regions[0].base = base;
 		type->regions[0].size = size;
 		type->regions[0].flags = flags;
+        /* memblock_set_region_node 函数接受两个参数：
+         *   1. 填充好的内存区域的地址
+         *   2. NUMA节点ID
+         * 该函数只是填充了 memblock_region 中的 nid 成员*/
 		memblock_set_region_node(&type->regions[0], nid);
 		type->total_size = size;
+        /* 在这之后我们就在 .meminit.data 区段拥有了
+         * 为扩展BIOS数据区域预留的第一个memblock 。 */
 		return 0;
 	}
 repeat:
@@ -699,13 +708,18 @@ static int __init_memblock memblock_reserve_region(phys_addr_t base,
 						   int nid,
 						   unsigned long flags)
 {
+    /* memblock_type 类型代表了一块内存 */
 	struct memblock_type *_rgn = &memblock.reserved;
 
+    /* 所有的内存块都将定义在 .meminit.data 区段中。
+     * 在我们定义了_rgn 之后，使用了 memblock_dbg 宏来输出相关的信息。
+     * 你可以在从内核命令行传入参数memblock=debug 来开启这些输出。 */
 	memblock_dbg("memblock_reserve: [%#016llx-%#016llx] flags %#02lx %pF\n",
 		     (unsigned long long)base,
 		     (unsigned long long)base + size - 1,
 		     flags, (void *)_RET_IP_);
 
+    /* 向 .meminit.data 区段添加了一个新的内存块区域 */
 	return memblock_add_range(_rgn, base, size, nid, flags);
 }
 

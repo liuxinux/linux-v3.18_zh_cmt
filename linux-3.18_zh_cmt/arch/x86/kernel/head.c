@@ -38,14 +38,19 @@ void __init reserve_ebda_region(void)
 	 * that the paravirt case can handle memory setup
 	 * correctly, without our help.
 	 */
+    /* 检查是否启用了半虚拟化 */
 	if (paravirt_enabled())
 		return;
 
 	/* end of low (conventional) memory */
+    /* 得到低地址内存的末尾地址 */
+    /* 得到了BIOS地地址内存的虚拟地址，以KB为单位，然后将其左移10位（即乘以
+       1024）转换为以字节为单位 */
 	lowmem = *(unsigned short *)__va(BIOS_LOWMEM_KILOBYTES);
 	lowmem <<= 10;
 
 	/* start of EBDA area */
+    /* 获得扩展BIOS数据区域的地址 */
 	ebda_addr = get_bios_ebda();
 
 	/*
@@ -54,6 +59,7 @@ void __init reserve_ebda_region(void)
 	 * to be off limits (bugzilla 2990).
 	 */
 
+    /* 来检查扩展BIOS数据区域与低地址内存的地址，看一看它们是否小于INSANE_CUTOFF 宏 */
 	/* If the EBDA address is below 128K, assume it is bogus */
 	if (ebda_addr < INSANE_CUTOFF)
 		ebda_addr = LOWMEM_CAP;
