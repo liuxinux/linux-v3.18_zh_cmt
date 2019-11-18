@@ -370,14 +370,17 @@ static void __init relocate_initrd(void)
 static void __init early_reserve_initrd(void)
 {
 	/* Assume only end is not page aligned */
+    /* 数获取RAM DISK的基地址以及大小以及大小加偏移*/
 	u64 ramdisk_image = get_ramdisk_image();
 	u64 ramdisk_size  = get_ramdisk_size();
 	u64 ramdisk_end   = PAGE_ALIGN(ramdisk_image + ramdisk_size);
 
+    /* 检查bootloader 提供的ramdisk信息 */
 	if (!boot_params.hdr.type_of_loader ||
 	    !ramdisk_image || !ramdisk_size)
 		return;		/* No initrd provided by bootloader */
 
+    /* 保留内存块将ramdisk传输到最终的内存地址，然后进行初始化 */
 	memblock_reserve(ramdisk_image, ramdisk_end - ramdisk_image);
 }
 static void __init reserve_initrd(void)
@@ -856,9 +859,14 @@ dump_kernel_offset(struct notifier_block *self, unsigned long v, void *p)
 
 void __init setup_arch(char **cmdline_p)
 {
-	memblock_reserve(__pa_symbol(_text),
+    /* memblock_reserve 函数对内存页进行分配。两个参数：*/
+    /*     1.base physical address of a memory block; */
+    /*     2.size of a memory block */
+	memblock_reserve(__pa_symbol(_text),/* __pa_symbol 宏指令来获取符号表 _text 段中的物理地址
+                                           定义位于arch/x86/include/asm/page.h*/
 			 (unsigned long)__bss_stop - (unsigned long)_text);
 
+    /*保留可用内存初始化initrd*/
 	early_reserve_initrd();
 
 	/*
@@ -897,15 +905,24 @@ void __init setup_arch(char **cmdline_p)
 	 * If we have OLPC OFW, we might end up relocating the fixmap due to
 	 * reserve_top(), so do this before touching the ioremap area.
 	 */
+    /* 检测系统是否支持One Laptop Per Child support */
 	olpc_ofw_detect();
 
+    /* 初始化调试功能（#DB -当TF标志位和rflags被设置时会被使用）和int3（ #BP ）中断门*/
 	early_trap_init();
+    /* 收集 CPU 和其供应商的信息 */
 	early_cpu_init();
+    /* 是初始化早期的 ioremap, ioremap 就是用来把设备内存映射到内核地址空间的 */
 	early_ioremap_init();
 
 	setup_olpc_ofw_pgd();
 
+    /* 获取根设备的主次设备号 */
+    /* 后面 initrd 会通过 do_mount_root 函数挂载到这个根设备上。
+     * 其中主设备号用来识别和这个设备有关的驱动。
+     * 次设备号用来表示使用该驱动的各设备 */
 	ROOT_DEV = old_decode_dev(boot_params.hdr.root_dev);
+    /* 设置与显示屏有关的参数.与拓展显示识别数据，视频模式，引导启动器类型等参数 */
 	screen_info = boot_params.screen_info;
 	edid_info = boot_params.edid_info;
 #ifdef CONFIG_X86_32
@@ -947,19 +964,28 @@ void __init setup_arch(char **cmdline_p)
 
 	x86_init.oem.arch_setup();
 
+    /* 设置iomem 的结束地址 */
+    /* boot_cpu_data 是我们在执行 early_cpu_init的时候初始化的 cpuinfo_x86 结构 */
+    /* x86_phys_bits 代表系统可达到的最大内存地址时需要的比特数。 */
 	iomem_resource.end = (1ULL << boot_cpu_data.x86_phys_bits) - 1;
+    /* 设置内存映射 */
 	setup_memory_map();
+    /* 复制 BIOS 增强磁盘设备信息 */
 	parse_setup_data();
 
+    /* 复制我们在 arch/x86/boot/edd.c 中 BIOS 的 EDD 信息到 edd 结构中 */
 	copy_edd();
 
+    /* 内存描述符的初始化 */
 	if (!boot_params.hdr.root_flags)
 		root_mountflags &= ~MS_RDONLY;
+    /* 内存描述符中内核代码段，数据段和 brk 段的初始化： */
 	init_mm.start_code = (unsigned long) _text;
 	init_mm.end_code = (unsigned long) _etext;
 	init_mm.end_data = (unsigned long) _edata;
 	init_mm.brk = _brk_end;
 
+    /* 代码/数据/ bss 资源的初始化 */
 	code_resource.start = __pa_symbol(_text);
 	code_resource.end = __pa_symbol(_etext)-1;
 	data_resource.start = __pa_symbol(_etext);
@@ -990,6 +1016,8 @@ void __init setup_arch(char **cmdline_p)
 	 * again from within noexec_setup() during parsing early parameters
 	 * to honor the respective command line option.
 	 */
+    /* NX 配置。 NX-bit 或者 no-execute 位是页目录条目的第 63比特位。
+     * 它的作用是控制被映射的物理页面是否具有执行代码的能力。 */
 	x86_configure_nx();
 
 	parse_early_param();

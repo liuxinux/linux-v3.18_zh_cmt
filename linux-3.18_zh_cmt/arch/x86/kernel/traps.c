@@ -770,14 +770,16 @@ dotraplinkage void do_iret_error(struct pt_regs *regs, long error_code)
 #endif
 
 /* Set of traps needed for early debugging. */
+/* 设置 #DB 和 #BP 处理函数，并且实现重新加载IDT */
 void __init early_trap_init(void)
 {
-	set_intr_gate_ist(X86_TRAP_DB, &debug, DEBUG_STACK);
+	set_intr_gate_ist(X86_TRAP_DB/*中断号*/, &debug/*中断/异常处理函数的基地址*/, DEBUG_STACK/*Interrupt Stack Table*/);
 	/* int3 can be called from all */
 	set_system_intr_gate_ist(X86_TRAP_BP, &int3, DEBUG_STACK);
 #ifdef CONFIG_X86_32
 	set_intr_gate(X86_TRAP_PF, page_fault);
 #endif
+    /* 重新加载 IDT 表 */
 	load_idt(&idt_descr);
 }
 

@@ -3972,6 +3972,7 @@ out_restore:
 	raw_local_irq_restore(flags);
 }
 
+/* 初始化了两个哈希表list_head并设置lockdep_initialized全局变量为1 */
 void lockdep_init(void)
 {
 	int i;

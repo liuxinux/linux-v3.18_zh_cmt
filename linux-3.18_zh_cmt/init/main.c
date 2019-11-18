@@ -462,6 +462,7 @@ void __init parse_early_param(void)
 
 static void __init boot_cpu_init(void)
 {
+    /* 获取当前处理器的ID */
 	int cpu = smp_processor_id();
 	/* Mark the boot cpu "present", "online" etc for SMP and UP case */
 	set_cpu_online(cpu, true);
@@ -497,8 +498,20 @@ static void __init mm_init(void)
 	vmalloc_init();
 }
 
+/* __init的定义如下：#define __init __section(.init.text) __cold notrace */
+/* 在初始化过程完成后，内核将通过调用 free_initmem 释放这些sections(段)。 */
+/* 注意 __init 属性是通过 __cold 和 notrace 两个属性来定义的 */
+/*     第一个属性 cold 的目的是标记此函数很少使用所以编译器必须优化此函数的大小 */
+/*     第二个属性 notrace 定义如下： */
+/*         #define notrace __attribute__((no_instrument_function)) */
+/*         含有 no_instrument_function 意思就是告诉编译器函数调用不产生环境变量(堆栈空间)。 */
+/* 在 start_kernel 函数的定义中，你也可以看到 __visible 属性的扩展： */
+/*     #define __visible __attribute__((externally_visible)) */
+/* 含有 externally_visible 意思就是告诉编译器有一些过程在使用该函数或者变量
+ * 为了防止标记这个函数/变量是 unusable */
 asmlinkage __visible void __init start_kernel(void)
 {
+    /* 表示内核命令行的全局指针 */
 	char *command_line;
 	char *after_dashes;
 
@@ -506,9 +519,13 @@ asmlinkage __visible void __init start_kernel(void)
 	 * Need to run as early as possible, to initialize the
 	 * lockdep hash:
 	 */
+    /* lockdep_init 初始化 lock validator. */
 	lockdep_init();
+    /* 设置canary init 进程堆栈以检测堆栈溢出。*/
 	set_task_stack_end_magic(&init_task);
+    /* x86架构下该函数为空*/
 	smp_setup_processor_id();
+    /* 此函数的执行几乎和lockdep_init 是一样的，但是填充的哈希对象是调试相关 */
 	debug_objects_early_init();
 
 	/*
@@ -518,6 +535,7 @@ asmlinkage __visible void __init start_kernel(void)
 
 	cgroup_init_early();
 
+    /* 关闭本地中断 */
 	local_irq_disable();
 	early_boot_irqs_disabled = true;
 
@@ -525,8 +543,10 @@ asmlinkage __visible void __init start_kernel(void)
  * Interrupts are still disabled. Do necessary setups, then
  * enable them
  */
+    /* 通过掩码初始化每一个CPU */
 	boot_cpu_init();
 	page_address_init();
+    /* 打印内核第一条信息 */
 	pr_notice("%s", linux_banner);
 	setup_arch(&command_line);
 	mm_init_cpumask(&init_mm);

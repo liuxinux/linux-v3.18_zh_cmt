@@ -29,6 +29,8 @@ static int __init noexec_setup(char *str)
 }
 early_param("noexec", noexec_setup);
 
+/* x86_configure_nx 函数中会检查 CPU 是否支持 NX-bit ，以及是否被禁用。
+ * 经过检查后，我们会根据结果给 _supported_pte_mask 赋值： */
 void x86_configure_nx(void)
 {
 	if (cpu_has_nx && !disable_nx)

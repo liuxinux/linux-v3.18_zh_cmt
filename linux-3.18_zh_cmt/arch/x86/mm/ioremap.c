@@ -375,20 +375,31 @@ bool __init is_early_ioremap_ptep(pte_t *ptep)
 	return ptep >= &bm_pte[0] && ptep < &bm_pte[PAGE_SIZE/sizeof(pte_t)];
 }
 
+/* 在初期的初始化代码中初始化临时的 ioremap 来映射 I/O 设备到内存区域 */
+/* 以便可以在正常的像 ioremap 这样的映射函数可用之前，
+ * 把 I/O 内存映射到内核地址空间以方便读取 */
 void __init early_ioremap_init(void)
 {
+    /*pmd_t 类型的 pmd 指针 */
 	pmd_t *pmd;
 
+    /* 检查 fixmap 是正确对齐的 
+     * fixmap - 是一段从 FIXADDR_START 到 FIXADDR_TOP 的固定虚拟地址映射区域。
+     * 它在子系统需要知道虚拟地址的编译过程中会被使用 */
 #ifdef CONFIG_X86_64
 	BUILD_BUG_ON((fix_to_virt(0) + PAGE_SIZE) & ((1 << PMD_SHIFT) - 1));
 #else
 	WARN_ON((fix_to_virt(0) + PAGE_SIZE) & ((1 << PMD_SHIFT) - 1));
 #endif
 
+    /* 填充512个临时的启动时固定映射表来完成无符号长整型矩阵 slot_virt 的初始化 */
 	early_ioremap_setup();
 
+    /* 获得FIX_BTMAP_BEGIN 的页中间目录条目，并把它赋值给了 pmd 变量 */
 	pmd = early_ioremap_pmd(fix_to_virt(FIX_BTMAP_BEGIN));
+    /* 启动时间页表 bm_pte 写满 0 */
 	memset(bm_pte, 0, sizeof(bm_pte));
+    /* 设置给定的页中间目录的页表条目 */
 	pmd_populate_kernel(&init_mm, pmd, bm_pte);
 
 	/*

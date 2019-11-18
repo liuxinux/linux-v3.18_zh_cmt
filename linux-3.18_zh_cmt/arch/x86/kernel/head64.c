@@ -198,5 +198,6 @@ void __init x86_64_start_reservations(char *real_mode_data)
     /*为EBDA（即Extended BIOS Data Area，扩展BIOS数据区域）预留空间*/
 	reserve_ebda_region();
 
+    /* 完成内核初始化并启动祖先进程(1号进程) */
 	start_kernel();
 }

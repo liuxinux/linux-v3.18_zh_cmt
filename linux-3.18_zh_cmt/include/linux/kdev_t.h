@@ -30,6 +30,8 @@ static inline u16 old_encode_dev(dev_t dev)
 	return (MAJOR(dev) << 8) | MINOR(dev);
 }
 
+/* 根据主次设备号调用了MKDEV来生成一个dev_t类型的设备。 */
+/* dev_t 是用来表示主/次设备号对的一个内核数据类型 */
 static inline dev_t old_decode_dev(u16 val)
 {
 	return MKDEV((val >> 8) & 255, val & 255);

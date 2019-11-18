@@ -57,6 +57,7 @@ static inline void __init __late_clear_fixmap(enum fixed_addresses idx)
 {
 	BUG();
 }
+
 #endif
 
 static void __iomem *prev_map[FIX_BTMAPS_SLOTS] __initdata;

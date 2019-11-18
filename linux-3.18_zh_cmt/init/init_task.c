@@ -15,6 +15,8 @@ static struct signal_struct init_signals = INIT_SIGNALS(init_signals);
 static struct sighand_struct init_sighand = INIT_SIGHAND(init_sighand);
 
 /* Initial task structure */
+/* init_task 代表初始化进程(任务)数据结构,获取堆栈并赋给 task_struct。
+ * task_struct 存储了进程的所有相关信息。定义在include/linux/sched.h。*/
 struct task_struct init_task = INIT_TASK(init_task);
 EXPORT_SYMBOL(init_task);
 
