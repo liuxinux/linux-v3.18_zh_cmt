@@ -1017,36 +1017,50 @@ void __init setup_arch(char **cmdline_p)
 	 * to honor the respective command line option.
 	 */
     /* NX 配置。 NX-bit 或者 no-execute 位是页目录条目的第 63比特位。
-     * 它的作用是控制被映射的物理页面是否具有执行代码的能力。 */
+     * 它的作用是控制被映射的物理页面是否具有执行代码的能力。
+     * 根据对NX bit的支持配置了_PAGE_NX 标志位*/
 	x86_configure_nx();
 
+    /* 解析内核命令行并且基于给定的参数创建不同的服务 */
 	parse_early_param();
 
+    /* 数打印出关于 NX 的信息 */
 	x86_report_nx();
 
 	/* after early param, so could get panic from serial */
+    /* 为 setup_data 重新映射内存并保留内存块 */
 	memblock_x86_reserve_range_setup_data();
 
+    /* 检查内置的 MPS 又称 多重处理器规范 表 */
 	if (acpi_mps_check()) {
 #ifdef CONFIG_X86_LOCAL_APIC
 		disable_apic = 1;
 #endif
+        /* 清除当前CPU中的 X86_FEATURE_APIC  */
 		setup_clear_cpu_cap(X86_FEATURE_APIC);
 	}
 
 #ifdef CONFIG_PCI
+    /* 如果我们设置了 CONFIG_PCI 选项，而且向内核命令行传递了 pci=earlydump 选项，那么
+       arch/x86/pci/early.c 中的 early_dump_pci_devices 函数将会被调用 */
 	if (pci_early_dump_regs)
 		early_dump_pci_devices();
 #endif
 
 	/* update the e820_saved too */
+    /* 向 e820map 中用给定的类型添加新的区域 */
 	e820_reserve_setup_data();
+    /* 数使用 sanitize_e820_map 函数对 e820map 进行清理 */
 	finish_e820_parsing();
 
 	if (efi_enabled(EFI_BOOT))
 		efi_init();
 
+    /* 收集与 桌面管理接口 有关的所有信息 */
+    /* 定义在 drivers/firmware/dmi_scan.c 中的 dmi_scan_machine 函数。
+     * 这个函数遍历System Management BIOS 结构，并从中提取信息。 */
 	dmi_scan_machine();
+    /* 数遍历整个内存设备 */
 	dmi_memdev_walk();
 	dmi_set_dump_stack_arch_desc();
 
@@ -1107,10 +1121,12 @@ void __init setup_arch(char **cmdline_p)
 	/*
 	 * Find and reserve possible boot-time SMP configuration:
 	 */
+    /* 是解析 SMP 的配置信息 */
 	find_smp_config();
 
 	reserve_ibft_region();
 
+    /* 在早期阶段分配页表缓冲区 */
 	early_alloc_pgt_buf();
 
 	/*
@@ -1118,8 +1134,11 @@ void __init setup_arch(char **cmdline_p)
 	 *  it could use memblock_find_in_range, could overlap with
 	 *  brk area.
 	 */
+    /* 因为我们之前已经创建好了页面缓冲区，所以现在我们使用
+     * reserve_brk 函数为 brk区段保留内存块: */
 	reserve_brk();
 
+    /* 释放内核映射中越界的内存区域 */
 	cleanup_highmap();
 
 	memblock_set_current_limit(ISA_END_ADDRESS);
